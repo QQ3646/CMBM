@@ -2,9 +2,6 @@ import numpy as np
 from sys import argv
 import time
 
-from numpy.ma.core import shape
-
-
 class QR:
     def __init__(self, q: np.ndarray, r: np.ndarray):
         self.q = q
@@ -13,7 +10,9 @@ class QR:
     def check(self, a_transformed: np.ndarray) -> None:
         assert np.allclose(np.dot(self.q.transpose(), self.r), a_transformed)
 
+
 def givens_rotations(a: np.ndarray, b: np.ndarray) -> tuple:
+    # theta = [cos \theta, sin \theta]
     def calculate_theta() -> tuple:
         from numpy import sqrt
 
@@ -22,17 +21,6 @@ def givens_rotations(a: np.ndarray, b: np.ndarray) -> tuple:
             return 1, 0
         else:
             return a[i, i] / t, -a[j, i] / t
-
-    #                     theta = [cos \theta, sin \theta]
-    def g(i: int, j: int, theta: tuple) -> np.ndarray:
-        m = a.shape[0]
-
-        result = np.eye(m)  # E
-        result[i, i] = result[j, j] = theta[0]
-        result[i, j] = -theta[1]
-        result[j, i] = theta[1]  # G(i, j, \theta)
-
-        return result
 
     def main_element_selection(a: np.ndarray, b: np.ndarray) -> list:
         def swap(i: int, j: int) -> None:
@@ -54,6 +42,7 @@ def givens_rotations(a: np.ndarray, b: np.ndarray) -> tuple:
         return swaps
 
     def rotation_matrix_dot(a: np.array, i: tuple, j: tuple, theta: tuple) -> None:
+        # rows a[i], a[j] is reference to element from matrix, so i need to copy them
         a_i = a[i, :].copy()
         a_j = a[j, :].copy()
 
@@ -68,7 +57,7 @@ def givens_rotations(a: np.ndarray, b: np.ndarray) -> tuple:
         a[j] = a_i * theta[1] + a_j * theta[0]
 
     swaps = main_element_selection(a, b)
-    gm = np.eye(m)
+    gm = np.eye(a.shape[0])
 
     for i in range(a.shape[1]):
         for j in range(i + 1, a.shape[0]):
@@ -92,7 +81,7 @@ def gauss(a: np.ndarray, b: np.ndarray) -> np.ndarray:
         x.append(b[i] / a[i, i])
     return np.array(x)
 
-def nrmse(sigma: np.ndarray, rr: np.ndarray) -> float:
+def nrmse_score(sigma: np.ndarray, rr: np.ndarray) -> float:
     c = 1 / max(sigma)
     ssum = np.sum(np.abs(rr - sigma) ** 2)
     ssum /= len(sigma)
@@ -100,37 +89,65 @@ def nrmse(sigma: np.ndarray, rr: np.ndarray) -> float:
     return c * ssum
 
 
-f = open("data_2.txt", "r")
-lines = np.array(list(map(lambda x: list(map(float, x.split())), f.readlines())))
-# lines = np.array([[0,0], [0.2, -2.321928094887362],[0.4, -1.3219280948873622],[0.6000000000000001, -0.736965594166206],[0.8, -0.3219280948873623]])
+def main(file: str, n: int, mode: str):
+    n += 1
 
-m = lines.shape[0]
-n = int(argv[1])
+    f = open("./data/" + file, "r")
+    lines = np.array(list(map(lambda x: list(map(float, x.split())), f.readlines())))
 
-a = np.empty((m, n))
-for i in range(m):
-    for j in range(n):
-        a[i, j] = lines[i][0] ** j
+    m = lines.shape[0]
 
-a_c = a.copy()
-llines = lines.copy()
-b = lines[:, 1]
+    a = np.empty((m, n))
+    for i in range(m):
+        for j in range(n):
+            a[i, j] = lines[i][0] ** j
 
-start = time.time()
+    aT = a.transpose()
+    if mode == "-qr":
+        cond = np.linalg.cond(a, 2)
+        condStr = "A"
+    elif mode == "-ne":
+        cond = np.linalg.cond(np.dot(aT, a), 2)
+        condStr = "A^T * A"
+    else:
+        print("Incorrect run mode. You should run with '-qr' for QR decomposition or '-ne' for normal equation method.")
+        exit()
 
-qr, swaps = givens_rotations(a, b)
-result = gauss(qr.r,  b)
+    a_c = a.copy()
+    llines = lines.copy()
+    b = lines[:, 1]
 
-rr = lines.copy()
-for i, j in swaps:
-    rr[[i, j], :] = rr[[j, i], :]
-f = lambda x: sum([(x ** _i) * result[_i] for _i in range(n)])
-for i in range(m):
-    rr[i, 1] = f(rr[i, 0])
+    start = time.time()
 
-t = time.time() - start
+    if mode == "-qr":
+        # QR-decomposition
+        qr, swaps = givens_rotations(a, b)
 
-rr = list(rr)
-rr.sort(key=lambda x: x[0])
-rr = np.array(rr)
-print(f"N = {n}, t = {t}, NRMSE = {nrmse(llines[:, 1], rr[:, 1])}")
+        result = gauss(qr.r,  b)
+    elif mode == "-ne":
+        aT = a.transpose()
+
+        # Normal eq
+        b = np.dot(aT, b)
+        a = np.dot(aT, a)
+
+        result = np.linalg.solve(a, b)
+    else:
+        print("Incorrect run mode. You should run with '-qr' for QR decomposition or '-ne' for normal equation method.")
+        exit()
+
+    rr = lines.copy()
+    f = lambda x: sum([(x ** _i) * result[_i] for _i in range(n)])
+    for i in range(m):
+        rr[i, 1] = f(rr[i, 0])
+
+    t = time.time() - start
+
+    rr = list(rr)
+    rr.sort(key=lambda x: x[0])
+    rr = np.array(rr)
+    print(f"N = {n - 1}, cond_2({condStr}) = {cond}, t = {t}, NRMSE = {nrmse_score(llines[:, 1], rr[:, 1])}")
+
+# You should run script with "python main.py *data_NUMBER*.txt *polynomial degree* -*mode (qr or ne)*"
+if __name__ == '__main__':
+    main(argv[1], int(argv[2]), argv[3])
