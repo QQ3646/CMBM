@@ -1,6 +1,13 @@
+import os
+
 import numpy as np
 from sys import argv
 import time
+
+from matplotlib import pyplot as plt
+import matplotlib.patches as patches
+import matplotlib.animation
+
 
 class QR:
     def __init__(self, q: np.ndarray, r: np.ndarray):
@@ -90,6 +97,42 @@ def nrmse_score(sigma: np.ndarray, rr: np.ndarray) -> float:
 
 
 def main(file: str, n: int, mode: str):
+    # функция для построения графиков: data - исходные данные (x, y), approximation_data - данные численного алгоритма (x, f(x))
+    def plot_graphics(data, approximation_data):
+        fig = plt.figure(figsize=(12, 8), frameon=True)
+        plt.style.use('ggplot')
+        plt.rcParams["mathtext.fontset"] = "cm"
+        plt.rcParams["font.family"] = "Times New Roman"
+        plt.rcParams['font.size'] = 37
+        plt.rcParams['text.color'] = 'black'
+        plt.rcParams['xtick.color'] = 'black'
+        plt.rcParams['ytick.color'] = 'black'
+        plt.rcParams['axes.labelcolor'] = 'black'
+        ax = fig.add_subplot(111)
+
+        ax.spines['bottom'].set_color('black')
+        ax.spines['top'].set_color('black')
+        ax.spines['right'].set_color('black')
+        ax.spines['left'].set_color('black')
+
+        ax.set(facecolor='w')
+        ax.grid('axis = "both"', color='gray')
+
+        ax.set_xlabel('$x$', labelpad=-10)
+        ax.set_ylabel('$y$', rotation=0, labelpad=20)
+
+        ax.plot(data[:, 0], data[:, 1], color='blue', linestyle='-', linewidth=3, label='Данные')
+
+        ax.plot(data[:, 0], approximation_data, color='red', linestyle='-', linewidth=2,
+                label=f'Приближение при N = {n}{mode}')
+        ax.legend(loc=4)
+
+        path = "./pic/"
+        if not os.path.exists(path):
+            os.makedir(path)
+
+        plt.savefig(f"./pic/{file[:file.find('.')]}{mode}-{n}.jpeg")
+
     n += 1
 
     f = open("./data/" + file, "r")
@@ -104,10 +147,10 @@ def main(file: str, n: int, mode: str):
 
     aT = a.transpose()
     if mode == "-qr":
-        cond = np.linalg.cond(a, 2)
+        cond = np.linalg.cond(a)
         condStr = "A"
     elif mode == "-ne":
-        cond = np.linalg.cond(np.dot(aT, a), 2)
+        cond = np.linalg.cond(np.dot(aT, a))
         condStr = "A^T * A"
     else:
         print("Incorrect run mode. You should run with '-qr' for QR decomposition or '-ne' for normal equation method.")
@@ -146,8 +189,14 @@ def main(file: str, n: int, mode: str):
     rr = list(rr)
     rr.sort(key=lambda x: x[0])
     rr = np.array(rr)
-    print(f"N = {n - 1}, cond_2({condStr}) = {cond}, t = {t}, NRMSE = {nrmse_score(llines[:, 1], rr[:, 1])}")
+    plot_graphics(llines, rr[:, 1])
 
-# You should run script with "python main.py *data_NUMBER*.txt *polynomial degree* -*mode (qr or ne)*"
+    if argv[-1] != "-gencsv":
+        print(f"N = {n - 1}, cond_2({condStr}) = {cond}, t = {t}, NRMSE = {nrmse_score(llines[:, 1], rr[:, 1])}")
+    else:
+        print(f"{n - 1}; {condStr}; {cond}; {t}; {nrmse_score(llines[:, 1], rr[:, 1])};")
+
+
+# You should run script with "python main.py *data_NUMBER*.txt *polynomial degree* -*mode (qr or ne)* (-genvsc)"
 if __name__ == '__main__':
     main(argv[1], int(argv[2]), argv[3])
