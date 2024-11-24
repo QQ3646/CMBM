@@ -192,9 +192,9 @@ def main(file: str, n: int, mode: str):
     plot_graphics(llines, rr[:, 1])
 
     if argv[-1] != "-gencsv":
-        print(f"N = {n - 1}, cond_2({condStr}) = {cond}, t = {t}, NRMSE = {nrmse_score(llines[:, 1], rr[:, 1])}")
+        print(f"N = {n - 1}, cond_2({condStr}) = {cond:.2e}, t = {t:0.2e}, NRMSE = {nrmse_score(llines[:, 1], rr[:, 1]):0.2e}")
     else:
-        print(f"{n - 1}; {condStr}; {cond}; {t}; {nrmse_score(llines[:, 1], rr[:, 1])};")
+        print(f"{n - 1}; {condStr}; {cond:.2e}; {t:.4e}; {nrmse_score(llines[:, 1], rr[:, 1]):0.2e};")
 
 
 # You should run script with "python main.py *data_NUMBER*.txt *polynomial degree* -*mode (qr or ne)* (-genvsc)"
