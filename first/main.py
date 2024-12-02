@@ -129,7 +129,7 @@ def main(file: str, n: int, mode: str):
 
         path = "./pic/"
         if not os.path.exists(path):
-            os.makedir(path)
+            os.mkdi(path)
 
         plt.savefig(f"./pic/{file[:file.find('.')]}{mode}-{n}.jpeg")
 
