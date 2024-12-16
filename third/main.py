@@ -1,4 +1,6 @@
 # 5 variant
+import os
+import time
 
 import numpy as np
 from matplotlib import pyplot as plt
@@ -41,13 +43,8 @@ f = k = lambda x: (12 * M(x)) / (E * b * h ** 3)
 uE = lambda x: (1.3076 * 10 ** (-13)) * x - \
                (6.15959 * 10 ** (-9) * L ** 4) * np.sin(np.pi * x / L)
 
-N = 10
-
-points = np.linspace(0, L, num=N + 1, endpoint=True)
-
 local_matrix = np.float64([[1, -1], [-1, 1]])
-local_rMatrix = np.float64 ([[2, 1], [1, 2]])
-Le = points[1] - points[0]
+local_rMatrix = np.float64([[2, 1], [1, 2]])
 def init_mj():
     cx = 1
     N_ = N + 1
@@ -74,11 +71,6 @@ def init_mj():
     return global_matrix, global_rMatrix
 
 
-gm, grm = init_mj()
-u_eV = uE(points)
-coeffs = np.linalg.solve(gm, grm)
-
-
 class fem_solution:
     def __init__(self, points, coeffs):
         self.points = points
@@ -95,12 +87,13 @@ class fem_solution:
             a0 = (u_left * x_right - u_right * x_left) / (x_right - x_left)
             return a1 * x + a0
 
-def draw_plot(points, coeffs, save=False):
+def draw_plot(points, coeffs, N):
     num_solution = fem_solution(points, coeffs).value
     X = np.linspace(0, L, 10000 + 1, endpoint=True)
     u = np.float64([uE(x) for x in X])
     u_h = np.float64([num_solution(x) for x in X])
 
+    plt.clf()
     plt.rcParams['font.family'] = 'Times New Roman'
     plt.rcParams['font.size'] = 16
 
@@ -112,11 +105,46 @@ def draw_plot(points, coeffs, save=False):
     plt.plot(X, u_h, label='Решение МКЭ', color=color_num, linestyle='--', linewidth=2)
     plt.scatter(points, coeffs, color=color_num, s=20)
     plt.legend()
-    if save:
-        N = np.shape(points)[0] - 1
-        filename = 'N = ' + str(N) + ' linear.png'
-        plt.savefig('graphs/' + filename)
-    plt.show()
 
-draw_plot(points, coeffs)
-print("d")
+    path = "./pic/"
+    if not os.path.exists(path):
+        os.mkdir(path)
+
+    plt.savefig(f"./pic/{N}.jpeg")
+
+Q = 10000
+error_inf = []
+error_2 = []
+cond = []
+
+with open("output.csv", "w") as fl:
+    fl.write("N;||E_r||_\\infty;R;||E_r||_{L_2};R;\\nu([K]);t (sec);\n")
+    for i in range(1, 8):
+        N = 2 ** i
+
+        points = np.linspace(0, L, num=N + 1, endpoint=True)
+
+
+        Le = points[1] - points[0]
+
+        start = time.time()
+        gm, grm = init_mj()
+        coeffs = np.linalg.solve(gm, grm)
+
+        num_solution = fem_solution(points, coeffs).value
+        t = time.time() - start
+
+        X = np.linspace(0, L, Q, endpoint=True)
+        u = np.float64([uE(x) for x in X])
+        u_h = np.float64([num_solution(x) for x in X])
+
+        error_inf.append(max(np.abs(u - u_h)) / max(np.abs(u)))
+        error_2.append(np.sqrt(np.trapz((u - u_h) ** 2, X) / np.trapz(u ** 2, X)))
+        cond.append(np.linalg.cond(gm))
+
+        draw_plot(points, coeffs, N=N)
+        if i == 1:
+            fl.write(f"{N};{error_inf[-1]:0.2e};-;{error_2[-1]:0.2e};-;{cond[-1]:0.2e};{t:0.4e};\n")
+        else:
+            fl.write(f"{N};{error_inf[-1]:0.2e};{np.log2(error_inf[-2] / error_inf[-1]):0.2e};{error_2[-1]:0.2e};{np.log2(error_2[-2] / error_2[-1]):0.2e};{cond[-1]:0.2e};{t:0.4e};\n")
+

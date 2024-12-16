@@ -2,12 +2,18 @@
 # QR -- Householder transformation
 # pryamoi metod
 # N = 5
+import os
 import time
 
 import numpy as np
 import math
 
+from matplotlib import pyplot as plt
+
 f = lambda x: (x ** 4 + 14 * x ** 3 + 49 * x ** 2 + 32 * x - 12) * np.exp(x)
+
+u_exact = lambda x: x ** 2 * (1 - x) ** 2 * np.exp(x)
+
 
 class ChebyshevPolyManager:
     _polynomials = [lambda x: 1, lambda x: x]
@@ -94,7 +100,7 @@ def init_matrix():
             for j in range(0, N + 1):
                 global_matrix[curr_start_idx + k, curr_start_row_idx + j] = poly.get_derivative(j, 4, y_[k])
         x = np.array([y_[j - 1] * ((points[1] - points[0]) / 2) + ((points[i] + points[i + 1]) / 2) for j in range(1, N + 1 + 1)])
-        global_vector[curr_start_idx: curr_start_idx + N + 1] = ((points[1] - points[0]) / 2) ** 4 * f(x) # TODO
+        global_vector[curr_start_idx: curr_start_idx + N + 1] = ((points[1] - points[0]) / 2) ** 4 * f(x)
 
         # Условия согласования
         global_matrix[curr_start_idx + N + 1, curr_start_row_idx: curr_start_row_idx + N + 1] = \
@@ -140,91 +146,76 @@ def init_matrix():
     global_matrix[curr_start_idx + N + 3, curr_start_row_idx: curr_start_row_idx + N + 1] = [poly.give_polynomial(i)(1) for i in range(N + 1)]
     global_matrix[curr_start_idx + N + 4, curr_start_row_idx: curr_start_row_idx + N + 1] = [poly.get_derivative(i, 1, 1) for i in range(N + 1)]
 
-K = 5
+def u(x, Matrix, GlobalNodes):
+    h = (GlobalNodes[1] - GlobalNodes[0]) / 2
+
+    if x == 1.0:
+        cell_id = len(GlobalNodes) - 2
+    else:
+        cell_id = int(x // (2 * h))
+
+    x_c = (GlobalNodes[cell_id] + GlobalNodes[cell_id + 1]) / 2
+    y = (x - x_c) / h
+    ans = sum([Matrix[cell_id, i] * poly.give_polynomial(i)(y) for i in range(N + 1)])
+    return ans
+
+def plot_solution(X_cor, u_, u_ex):
+    plt.rcParams['font.family'] = 'Times New Roman'
+    plt.rcParams['font.size'] = 16
+    plt.clf()
+
+    plt.grid(True)
+    # рисуем точное решение
+    plt.plot(X_cor, u_ex, label='Точное решение')
+    # рисуем численное решение
+    plt.plot(X_cor, u_, linestyle='--', label='Приближение')
+    plt.legend(loc=4)
+
+    path = "./pic/"
+    if not os.path.exists(path):
+        os.mkdir(path)
+
+    plt.savefig(f"./pic/{K}.jpeg")
+
 N = 4
+err_rinf = []
+err_ainf = []
+times = []
 
-y_ = np.array([-np.cos((2 * i - 1) / (2 * (N + 1)) * np.pi) for i in range(1, N + 2)])
+with open("output.csv", "w") as fl:
+    fl.write("K;$||E_a||_\\infty$;R;$||E_r||_\\infty$;R;$t_{sol}$;$\\mu(\\tilde(A))$;\n")
+    for i in range(6):
+        K = 5 * 2 ** i
 
-poly = ChebyshevPolyManager()
-points = np.arange(0, 1 + 1e-10, 1 / K)
+        y_ = np.array([-np.cos((2 * i - 1) / (2 * (N + 1)) * np.pi) for i in range(1, N + 2)])
 
-global_matrix = np.zeros((K * (N + 5), K * (N + 1)))
-global_vector = np.zeros((K * (N + 5)))
-init_matrix()
+        poly = ChebyshevPolyManager()
+        points = np.arange(0, 1 + 1e-10, 1 / K)
+
+        global_matrix = np.zeros((K * (N + 5), K * (N + 1)))
+        global_vector = np.zeros((K * (N + 5)))
+        init_matrix()
 
 
-def givens_rotations(a: np.ndarray, b: np.ndarray):
-    # theta = [cos \theta, sin \theta]
-    def calculate_theta() -> tuple:
-        from numpy import sqrt
+        start = time.perf_counter()
+        result = np.linalg.lstsq(global_matrix, global_vector)[0]
+        end = time.perf_counter()
 
-        t = sqrt(a[i, i] ** 2 + a[j, i] ** 2)
-        if abs(t) < 1e-6:
-            return 1, 0
+        X_cor = np.linspace(0, 1, 100)
+        CoeffMatrix = np.zeros((K, N + 1))
+        for j in range(K):
+            CoeffMatrix[j] = result[j * (N + 1):(j + 1) * (N + 1)]
+
+        u_ = np.array([u(x, CoeffMatrix, points) for x in X_cor])
+        u_ex = np.array([u_exact(i) for i in X_cor])
+        err_rinf.append(np.sqrt(np.trapz((u_ - u_ex) ** 2, X_cor) / np.trapz(u_ ** 2, X_cor)))
+        err_ainf.append(np.max(np.abs(u_ - u_ex)))
+
+        plot_solution(X_cor, u_, u_ex)
+
+        times.append(end - start)
+        if i == 0:
+            fl.write(f"{K};{err_rinf[-1]:0.2e};-;{err_ainf[-1]:0.2e};-;{times[-1]:0.2e};{np.linalg.cond(global_matrix):0.2e};\n")
         else:
-            return a[i, i] / t, -a[j, i] / t
+            fl.write(f"{K};{err_rinf[-1]:0.2e};{np.log2(err_rinf[-2]/err_rinf[-1]):0.2e};{err_ainf[-1]:0.2e};{np.log2(err_ainf[-2]/err_ainf[-1]):0.2e};{times[-1]:0.2e};{np.linalg.cond(global_matrix):0.2e};\n")
 
-    def main_element_selection(a: np.ndarray, b: np.ndarray) -> list:
-        def swap(i: int, j: int) -> None:
-            a[[i, j], :] = a[[j, i], :]
-            b[[i, j]] = b[[j, i]]
-            swaps.append((i, j))
-
-        swaps = []
-
-        for i in range(a.shape[1]):
-            #   ind, value
-            m = (i, a[i, i])
-            for j in range(i + 1, a.shape[0]):
-                if abs(m[1]) < abs(a[j, i]):
-                    m = (j, a[j, i])
-
-            if i != m[0]: swap(i, m[0])
-
-        return swaps
-
-    def rotation_matrix_dot(a: np.array, i: tuple, j: tuple, theta: tuple) -> None:
-        # rows a[i], a[j] is reference to element from matrix, so i need to copy them
-        a_i = a[i, :].copy()
-        a_j = a[j, :].copy()
-
-        a[i, :] = a_i[:] * theta[0] - a_j[:] * theta[1]
-        a[j, :] = a_i[:] * theta[1] + a_j[:] * theta[0]
-
-    def rotation_vec_dot(a: np.array, i: tuple, j: tuple, theta: tuple) -> None:
-        a_i = a[i].copy()
-        a_j = a[j].copy()
-
-        a[i] = a_i * theta[0] - a_j * theta[1]
-        a[j] = a_i * theta[1] + a_j * theta[0]
-
-    swaps = main_element_selection(a, b)
-    gm = np.eye(a.shape[0])
-
-    for i in range(a.shape[1]):
-        for j in range(i + 1, a.shape[0]):
-            if abs(a[j, i]) >= 1e-6:
-                theta = calculate_theta()
-                rotation_vec_dot(b, i, j, theta)
-                rotation_matrix_dot(a, i, j, theta)
-
-    return a
-
-def gauss(a: np.ndarray, b: np.ndarray) -> np.ndarray:
-    for i in range(a.shape[1] - 1, 0, -1):
-        for j in range(i - 1, -1, -1):
-            c = -1 * a[j, i] / a[i, i]
-            a[j, i] += a[i, i] * c
-            b[j] += b[i] * c
-    x = []
-    for i in range(a.shape[1]):
-        x.append(b[i] / a[i, i])
-    return np.array(x)
-
-SLAE_solving_time = []
-
-start = time.perf_counter()
-ans = givens_rotations(global_matrix, global_vector)
-result = gauss(ans,  global_vector)
-end = time.perf_counter()
-SLAE_solving_time.append('%.2e' % (end - start))
