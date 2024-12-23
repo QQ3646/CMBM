@@ -149,7 +149,7 @@ def main(file: str, n: int, mode: str):
     if mode == "-qr":
         cond = np.linalg.cond(a)
         condStr = "A"
-    elif mode == "-ne":
+    elif mode == "-ne" or mode == "-svd":
         cond = np.linalg.cond(np.dot(aT, a))
         condStr = "A^T * A"
     else:
@@ -159,6 +159,8 @@ def main(file: str, n: int, mode: str):
     a_c = a.copy()
     llines = lines.copy()
     b = lines[:, 1]
+
+    S, U, V = 0, 0, 0
 
     start = time.time()
 
@@ -175,16 +177,34 @@ def main(file: str, n: int, mode: str):
         a = np.dot(aT, a)
 
         result = np.linalg.solve(a, b)
+    elif mode == "-svd":
+        aT = a.transpose()
+        aTa = np.dot(aT, a)
+
+        singV, V = np.linalg.eig(aTa)
+        singV = np.sort(singV)[::-1]
+        singV = np.sqrt(singV)
+
+        S = np.diag(1 / singV)
+        U = np.dot(a, np.dot(V, S))
     else:
         print("Incorrect run mode. You should run with '-qr' for QR decomposition or '-ne' for normal equation method.")
         exit()
 
-    rr = lines.copy()
-    f = lambda x: sum([(x ** _i) * result[_i] for _i in range(n)])
-    for i in range(m):
-        rr[i, 1] = f(rr[i, 0])
+    if mode != "-svd":
+        rr = lines.copy()
+        f = lambda x: sum([(x ** _i) * result[_i] for _i in range(n)])
+        for i in range(m):
+            rr[i, 1] = f(rr[i, 0])
 
     t = time.time() - start
+
+    if mode == "-svd":
+        result = np.dot(V, np.dot(S, np.dot(U.transpose(), b)))
+        rr = lines.copy()
+        f = lambda x: sum([(x ** _i) * result[_i] for _i in range(n)])
+        for i in range(m):
+            rr[i, 1] = f(rr[i, 0])
 
     rr = list(rr)
     rr.sort(key=lambda x: x[0])
@@ -197,6 +217,6 @@ def main(file: str, n: int, mode: str):
         print(f"{n - 1}; {condStr}; {cond:.2e}; {t:.4e}; {nrmse_score(llines[:, 1], rr[:, 1]):0.2e};")
 
 
-# You should run script with "python main.py *data_NUMBER*.txt *polynomial degree* -*mode (qr or ne)* (-genvsc)"
+# You should run script with "python main.py *data_NUMBER*.txt *polynomial degree* -*mode (qr/ne/svd)* (-genvsc)"
 if __name__ == '__main__':
     main(argv[1], int(argv[2]), argv[3])

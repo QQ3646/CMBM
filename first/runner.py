@@ -21,9 +21,17 @@ if __name__ == '__main__':
         out.write("\n")
 
         for file in ["data_2.txt", "data_4.txt", "data_5.txt"]:
-            header2 = f"Normal equations; {file};" + ";" * 3 + "\n" if argv[-1] == "-gencsv" else f"QR dec -- {file}:\n"
+            header2 = f"Normal equations; {file};" + ";" * 3 + "\n" if argv[-1] == "-gencsv" else f"ne -- {file}:\n"
             out.write(header2)
 
             for i in range(0, 10):
                 out.write(format_stdout(str(subprocess.run(f"python ./main.py {file} {i} -ne {'-gencsv' if argv[-1] == '-gencsv' else ''}", capture_output=True).stdout)) + "\n")
+            out.write("\n")
+
+        for file in ["data_2.txt", "data_4.txt", "data_5.txt"]:
+            header2 = f"SVD decomposition; {file};" + ";" * 3 + "\n" if argv[-1] == "-gencsv" else f"SVD -- {file}:\n"
+            out.write(header2)
+
+            for i in range(0, 10):
+                out.write(format_stdout(str(subprocess.run(f"python ./main.py {file} {i} -svd {'-gencsv' if argv[-1] == '-gencsv' else ''}", capture_output=True).stdout)) + "\n")
             out.write("\n")
