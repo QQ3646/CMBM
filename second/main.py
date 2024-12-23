@@ -146,18 +146,16 @@ def init_matrix():
     global_matrix[curr_start_idx + N + 3, curr_start_row_idx: curr_start_row_idx + N + 1] = [poly.give_polynomial(i)(1) for i in range(N + 1)]
     global_matrix[curr_start_idx + N + 4, curr_start_row_idx: curr_start_row_idx + N + 1] = [poly.get_derivative(i, 1, 1) for i in range(N + 1)]
 
-def u(x, Matrix, GlobalNodes):
-    h = (GlobalNodes[1] - GlobalNodes[0]) / 2
+def u(x, m, points):
+    h = (points[1] - points[0]) / 2
 
     if x == 1.0:
-        cell_id = len(GlobalNodes) - 2
+        cell_id = len(points) - 2
     else:
         cell_id = int(x // (2 * h))
 
-    x_c = (GlobalNodes[cell_id] + GlobalNodes[cell_id + 1]) / 2
-    y = (x - x_c) / h
-    ans = sum([Matrix[cell_id, i] * poly.give_polynomial(i)(y) for i in range(N + 1)])
-    return ans
+    x_c = (points[cell_id] + points[cell_id + 1]) / 2
+    return sum([m[cell_id, i] * poly.give_polynomial(i)((x - x_c) / h) for i in range(N + 1)])
 
 def plot_solution(X_cor, u_, u_ex):
     plt.rcParams['font.family'] = 'Times New Roman'
@@ -165,9 +163,7 @@ def plot_solution(X_cor, u_, u_ex):
     plt.clf()
 
     plt.grid(True)
-    # рисуем точное решение
     plt.plot(X_cor, u_ex, label='Точное решение')
-    # рисуем численное решение
     plt.plot(X_cor, u_, linestyle='--', label='Приближение')
     plt.legend(loc=4)
 
@@ -199,7 +195,7 @@ with open("output.csv", "w") as fl:
 
         start = time.perf_counter()
         result = np.linalg.lstsq(global_matrix, global_vector)[0]
-        end = time.perf_counter()
+        times.append(time.perf_counter() - start) 
 
         X_cor = np.linspace(0, 1, 100)
         CoeffMatrix = np.zeros((K, N + 1))
@@ -213,7 +209,7 @@ with open("output.csv", "w") as fl:
 
         plot_solution(X_cor, u_, u_ex)
 
-        times.append(end - start)
+        
         if i == 0:
             fl.write(f"{K};{err_rinf[-1]:0.2e};-;{err_ainf[-1]:0.2e};-;{times[-1]:0.2e};{np.linalg.cond(global_matrix):0.2e};\n")
         else:
